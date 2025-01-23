@@ -57,8 +57,17 @@ UART_HandleTypeDef huart3;
 /* USER CODE BEGIN PV */
 
 float temperature;
-float temp_zadana=25;
+float temp_zadana=27;
 int32_t pressure;
+
+/* PID Parameters */
+float Kp = 5.0;  // Proportional gain
+float Ki = 0.1;  // Integral gain
+float Kd = 0.05; // Derivative gain
+
+float integral = 0.0;
+float previous_error = 0.0;
+float output = 0.0;
 
 /* USER CODE END PV */
 
@@ -172,16 +181,31 @@ int main(void)
 	  sprintf((char*)text, "T_zad. %.2f  C", temp_zadana);
 	  lcd_send_string(text);
 
-	  if (temperature<temp_zadana)
-	  {
-	  	  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7, GPIO_PIN_SET);
-	  	  HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
-	  }
-	  else
-	  {
-		  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7, GPIO_PIN_RESET);
-		  HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
-	  }
+	  // PID Control Logic
+	          float error = temp_zadana - temperature;  // Obliczenie błędu
+	          integral += error * 0.5;                  // Całkowanie (przemnożone przez 0.5, aby ograniczyć czas trwania)
+	          if (integral > 5.0) integral = 5.0;      // Ograniczenie całki, aby uniknąć jej zbytniego wzrostu
+	          if (integral < -5.0) integral = -5.0;    // Ograniczenie całki w drugą stronę
+
+	          float derivative = (error - previous_error) / 0.5; // Różniczkowanie (przemnożone przez 0.5, aby ograniczyć zmienność)
+
+	          output = Kp * error + Ki * integral + Kd * derivative; // Obliczenie wyjścia PID
+
+	          // Ograniczamy wyjście
+	          if (output > 1.0) output = 1.0;
+	          if (output < 0.0) output = 0.0;
+
+	          // Ustawiamy stan grzałki w zależności od wyjścia PID
+	          if (output > 0.5) {
+	              HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7, GPIO_PIN_SET);
+	              HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
+	          } else {
+	              HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7, GPIO_PIN_RESET);
+	              HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
+	          }
+
+	          // Przechowywanie poprzedniego błędu do obliczeń różniczkowych
+	          previous_error = error;
 
 	  HAL_Delay(500);
   }
