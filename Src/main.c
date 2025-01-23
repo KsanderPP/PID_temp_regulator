@@ -76,6 +76,8 @@ float temp_from_uart;
 int encoder_adjusted = 0;  // Flaga, która będzie śledzić, czy temperatura była zmieniona przez enkoder
 uint32_t last_encoder_time = 0;  // Czas ostatniego obrotu enkodera
 
+float last_temp_from_uart = 0.0;  // Zmienna przechowująca poprzednią wartość z UART
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -150,10 +152,11 @@ int main(void)
       // Konwertujemy odebrany tekst na zmienną float
       sscanf(uart_buffer, "%f", &temp_from_uart);
 
-      // Sprawdzamy, czy wartość jest w dopuszczalnym zakresie (np. 20-35°C)
-      if (temp_from_uart >= 20.0 && temp_from_uart <= 35.0 && encoder_adjusted == 0)
+      // Sprawdzamy, czy wartość jest w dopuszczalnym zakresie (np. 20-35°C) i czy różni się od poprzedniej wartości
+      if (temp_from_uart >= 20.0 && temp_from_uart <= 35.0 && temp_from_uart != last_temp_from_uart)
       {
-          temp_zadana = temp_from_uart;  // Zmieniamy zadaną temperaturę tylko, jeśli nie była zmieniana przez enkoder
+          temp_zadana = temp_from_uart;  // Zmieniamy zadaną temperaturę tylko, jeśli różni się od poprzedniej
+          last_temp_from_uart = temp_from_uart;  // Zapamiętujemy nową wartość
       }
   }
 
@@ -418,11 +421,11 @@ static void MX_TIM1_Init(void)
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 7;
+  sConfig.IC1Filter = 3;
   sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 7;
+  sConfig.IC2Filter = 3;
   if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
   {
     Error_Handler();
