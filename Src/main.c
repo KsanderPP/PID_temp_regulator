@@ -50,6 +50,8 @@
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c4;
 
+TIM_HandleTypeDef htim1;
+
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
@@ -66,6 +68,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2C4_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -110,6 +113,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_I2C1_Init();
   MX_I2C4_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   BMP280_Init(&hi2c1, BMP280_TEMPERATURE_16BIT, BMP280_STANDARD, BMP280_FORCEDMODE);
@@ -119,6 +123,8 @@ int main(void)
   lcd_put_cur(1, 0);
   lcd_send_string("I2C1-BMP,I2C4-LCD");
   HAL_Delay(2000);
+
+  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
 
   /* USER CODE END 2 */
 
@@ -140,7 +146,28 @@ int main(void)
 	  lcd_send_string(text);
 	  lcd_put_cur(1, 0);
 
-	  // tutaj dodaj odczyt z enkodera - temp_zadana
+	  // Odczytujemy wartość z enkodera
+	  int encoder_value = __HAL_TIM_GET_COUNTER(&htim1);
+
+	  // Sprawdzamy kierunek obrotu enkodera
+	  static int previous_encoder_value = 0;  // Zmienna do przechowywania poprzedniej wartości
+	  int encoder_delta = encoder_value - previous_encoder_value;  // Różnica między aktualnym i poprzednim odczytem
+
+	  // Jeśli obracamy w jedną stronę (wartość rośnie), zwiększamy temp_zadana
+	  if (encoder_delta > 0) {
+	    if (temp_zadana < 34.90) {
+	      temp_zadana += 0.1;  // Zwiększamy o 0.1 stopnia
+	    }
+	  }
+	  // Jeśli obracamy w drugą stronę (wartość maleje), zmniejszamy temp_zadana
+	  else if (encoder_delta < 0) {
+	    if (temp_zadana > 20.00) {
+	      temp_zadana -= 0.1;  // Zmniejszamy o 0.1 stopnia
+	    }
+	  }
+
+	  // Aktualizujemy poprzednią wartość enkodera
+	  previous_encoder_value = encoder_value;
 
 	  sprintf((char*)text, "T_zad. %.2f  C", temp_zadana);
 	  lcd_send_string(text);
@@ -155,7 +182,8 @@ int main(void)
 		  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_7, GPIO_PIN_RESET);
 		  HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
 	  }
-	  HAL_Delay(1000);
+
+	  HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -306,6 +334,57 @@ static void MX_I2C4_Init(void)
 }
 
 /**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 0;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 20;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI1;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 7;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 7;
+  if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+/**
   * @brief USART3 Initialization Function
   * @param None
   * @retval None
@@ -356,6 +435,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
@@ -450,6 +530,8 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
+
+/* USER CODE BEGIN 4 */
 
 /* USER CODE BEGIN 4 */
 
