@@ -69,6 +69,13 @@ float integral = 0.0;
 float previous_error = 0.0;
 float output = 0.0;
 
+#define MAX_UART_LENGTH 20
+char uart_buffer[MAX_UART_LENGTH];
+float temp_from_uart;
+
+int encoder_adjusted = 0;  // Flaga, która będzie śledzić, czy temperatura była zmieniona przez enkoder
+uint32_t last_encoder_time = 0;  // Czas ostatniego obrotu enkodera
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -135,6 +142,21 @@ int main(void)
 
   HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_ALL);
 
+  void UART_Receive_Temperature(void)
+  {
+      // Oczekujemy na dane przez UART
+      HAL_UART_Receive(&huart3, (uint8_t*)uart_buffer, MAX_UART_LENGTH, 1000);
+
+      // Konwertujemy odebrany tekst na zmienną float
+      sscanf(uart_buffer, "%f", &temp_from_uart);
+
+      // Sprawdzamy, czy wartość jest w dopuszczalnym zakresie (np. 20-35°C)
+      if (temp_from_uart >= 20.0 && temp_from_uart <= 35.0 && encoder_adjusted == 0)
+      {
+          temp_zadana = temp_from_uart;  // Zmieniamy zadaną temperaturę tylko, jeśli nie była zmieniana przez enkoder
+      }
+  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -144,6 +166,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  // Odbiór nowej temperatury przez UART
+	  UART_Receive_Temperature();
 
 	  BMP280_ReadTemperatureAndPressure(&temperature, &pressure);
 	  sprintf((char*)text, "%.2f, ", temperature);
@@ -155,6 +180,10 @@ int main(void)
 	  lcd_send_string(text);
 	  lcd_put_cur(1, 0);
 
+	  if (HAL_GetTick() - last_encoder_time > 1000) {  // Po 1 sekundzie (1000 ms)
+	      encoder_adjusted = 0;  // Resetujemy flagę, umożliwiając UART zmianę temperatury
+	  }
+
 	  // Odczytujemy wartość z enkodera
 	  int encoder_value = __HAL_TIM_GET_COUNTER(&htim1);
 
@@ -164,15 +193,18 @@ int main(void)
 
 	  // Jeśli obracamy w jedną stronę (wartość rośnie), zwiększamy temp_zadana
 	  if (encoder_delta > 0) {
-	    if (temp_zadana < 34.90) {
-	      temp_zadana += 0.1;  // Zwiększamy o 0.1 stopnia
-	    }
+	      if (temp_zadana < 34.90) {
+	          temp_zadana += 0.1;  // Zwiększamy o 0.1 stopnia
+	          encoder_adjusted = 1;  // Zmieniono temperaturę przez enkoder
+	          last_encoder_time = HAL_GetTick();  // Zapamiętujemy czas zmiany
+	      }
 	  }
-	  // Jeśli obracamy w drugą stronę (wartość maleje), zmniejszamy temp_zadana
 	  else if (encoder_delta < 0) {
-	    if (temp_zadana > 20.00) {
-	      temp_zadana -= 0.1;  // Zmniejszamy o 0.1 stopnia
-	    }
+	      if (temp_zadana > 20.00) {
+	          temp_zadana -= 0.1;  // Zmniejszamy o 0.1 stopnia
+	          encoder_adjusted = 1;  // Zmieniono temperaturę przez enkoder
+	          last_encoder_time = HAL_GetTick();  // Zapamiętujemy czas zmiany
+	      }
 	  }
 
 	  // Aktualizujemy poprzednią wartość enkodera
